@@ -1,4 +1,6 @@
-function HomePage() {
+import type { ReactElement } from 'react';
+
+function HomePage(): ReactElement {
   return (
     <main className="app-main">
       <h1>Notes App</h1>

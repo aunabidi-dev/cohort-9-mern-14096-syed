@@ -1,10 +1,10 @@
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
 interface AppLayoutProps {
   children: ReactNode;
 }
 
-function AppLayout({ children }: AppLayoutProps) {
+function AppLayout({ children }: AppLayoutProps): ReactElement {
   return (
     <div className="app">
       <header className="app-header">

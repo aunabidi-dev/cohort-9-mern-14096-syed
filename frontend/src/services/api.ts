@@ -9,16 +9,20 @@ async function request<T>(
 ): Promise<T> {
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
       },
-      ...options,
     });
 
     if (!response.ok) {
       const errorBody: ApiErrorBody = await response.json().catch(() => ({}));
       throw new Error(errorBody.message || 'Request failed');
+    }
+
+    if (response.status === 204) {
+      return undefined as T;
     }
 
     return (await response.json()) as T;

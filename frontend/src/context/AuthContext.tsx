@@ -3,12 +3,13 @@ import {
   useContext,
   useMemo,
   type PropsWithChildren,
+  type ReactElement,
 } from 'react';
 import type { AuthContextValue } from '../types/auth';
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: PropsWithChildren) {
+export function AuthProvider({ children }: PropsWithChildren): ReactElement {
   const value = useMemo<AuthContextValue>(
     () => ({
       user: null,

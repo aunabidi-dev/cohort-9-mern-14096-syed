@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+
+# Test coverage
+coverage/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db

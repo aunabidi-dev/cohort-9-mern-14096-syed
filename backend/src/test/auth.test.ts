@@ -17,6 +17,7 @@ import {
 } from '../utils/auth';
 import { AppError } from '../types/error';
 
+const isDatabaseOptOutEnabled = process.env.SKIP_DB_TESTS === 'true';
 const testEmail = `phase2-test-${Date.now()}@example.com`;
 const testPassword = 'SecurePass123!';
 const testName = 'Phase Two Tester';
@@ -122,8 +123,13 @@ describe('Phase 2 authentication', () => {
 
       try {
         await initializeDatabase();
-      } catch {
-        this.skip();
+      } catch (error) {
+        if (isDatabaseOptOutEnabled) {
+          this.skip();
+          return;
+        }
+
+        throw error;
       }
 
       server = await startServer();

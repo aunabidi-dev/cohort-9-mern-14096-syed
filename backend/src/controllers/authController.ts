@@ -1,9 +1,13 @@
 import type { Request, Response } from 'express';
 import * as authService from '../services/authService';
-import type { AuthResult } from '../services/authService';
+import type {
+  AuthResult,
+  LoginInput,
+  RegisterInput,
+} from '../services/authService';
 
 export async function register(
-  req: Request,
+  req: Request<unknown, AuthResult, RegisterInput>,
   res: Response<AuthResult>,
 ): Promise<void> {
   const result = await authService.register(req.body);
@@ -11,7 +15,7 @@ export async function register(
 }
 
 export async function login(
-  req: Request,
+  req: Request<unknown, AuthResult, LoginInput>,
   res: Response<AuthResult>,
 ): Promise<void> {
   const result = await authService.login(req.body);

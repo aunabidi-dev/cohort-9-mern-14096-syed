@@ -1,0 +1,36 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  padding: 1rem 2rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.app-logo {
+  font-weight: 600;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.app-main {
+  text-align: center;
+  max-width: 32rem;
+  padding: 2rem;
+}
+
+.app-main h1 {
+  margin-bottom: 0.5rem;
+}
+
+.app-main p {
+  color: #64748b;
+}

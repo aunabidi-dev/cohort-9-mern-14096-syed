@@ -8,7 +8,7 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/smoke-test.ts"
+    "test": "tsx src/smoke-test.ts && mocha --require tsx/cjs --require ./src/test/setup.ts --extension ts \"src/test/**/*.test.ts\""
   },
   "keywords": [],
   "author": "",

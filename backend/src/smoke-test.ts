@@ -23,9 +23,11 @@ function stopServer(server: Server): Promise<void> {
 }
 
 async function runSmokeTest(): Promise<void> {
-  const server = await startServer();
+  let server: Server | undefined;
 
   try {
+    server = await startServer();
+
     const address = server.address();
 
     if (!address || typeof address === 'string') {
@@ -46,7 +48,9 @@ async function runSmokeTest(): Promise<void> {
 
     console.log('Smoke test passed');
   } finally {
-    await stopServer(server);
+    if (server) {
+      await stopServer(server);
+    }
   }
 }
 

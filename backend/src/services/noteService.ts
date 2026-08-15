@@ -173,18 +173,18 @@ export async function updateNoteForUser(
   input: UpdateNoteInput,
 ): Promise<NoteWithTags> {
   const id = parseNoteId(rawId);
-  // Auth check only — tags are not needed at this point.
-  const note = await findNoteRow(id);
-
-  if (!note || note.user_id !== userId) {
-    throw new AppError(404, 'Note not found');
-  }
-
   const title = parseTitle(input.title);
   const content = parseContent(input.content);
   const tags = parseTags(input.tags);
 
   try {
+    // Auth check only — tags are not needed at this point.
+    const note = await findNoteRow(id);
+
+    if (!note || note.user_id !== userId) {
+      throw new AppError(404, 'Note not found');
+    }
+
     const updated = await updateNote(id, title, content, tags);
 
     if (!updated) {

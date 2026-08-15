@@ -93,10 +93,14 @@ async function insertNoteTags(
     values.push(noteId, tag);
   }
 
-  await conn.execute(
-    `INSERT INTO note_tags (note_id, name) VALUES ${placeholders}`,
-    values,
-  );
+  try {
+    await conn.execute(
+      `INSERT INTO note_tags (note_id, name) VALUES ${placeholders}`,
+      values,
+    );
+  } catch (error) {
+    throw new Error(`Failed to insert tags for note ${noteId}: ${(error as Error).message}`);
+  }
 }
 
 /**
@@ -108,7 +112,11 @@ async function replaceNoteTags(
   tags: string[],
   conn: PoolConnection,
 ): Promise<void> {
-  await conn.execute('DELETE FROM note_tags WHERE note_id = ?', [noteId]);
+  try {
+    await conn.execute('DELETE FROM note_tags WHERE note_id = ?', [noteId]);
+  } catch (error) {
+    throw new Error(`Failed to clear existing tags for note ${noteId}: ${(error as Error).message}`);
+  }
   await insertNoteTags(noteId, tags, conn);
 }
 
@@ -179,48 +187,52 @@ export async function queryNotes(
   userId: number,
   options: QueryNotesOptions = {},
 ): Promise<NoteWithTags[]> {
-  const conditions: string[] = ['n.user_id = ?'];
-  const params: (number | string)[] = [userId];
+  try {
+    const conditions: string[] = ['n.user_id = ?'];
+    const params: (number | string)[] = [userId];
 
-  if (options.search) {
-    conditions.push('(n.title LIKE ? OR n.content LIKE ?)');
-    // Escape LIKE wildcards so user input is treated as a literal substring.
-    const escaped = options.search
-      .replace(/\\/g, '\\\\')
-      .replace(/%/g, '\\%')
-      .replace(/_/g, '\\_');
-    const pattern = `%${escaped}%`;
-    params.push(pattern, pattern);
-  }
+    if (options.search) {
+      conditions.push('(n.title LIKE ? OR n.content LIKE ?)');
+      // Escape LIKE wildcards so user input is treated as a literal substring.
+      const escaped = options.search
+        .replace(/\\/g, '\\\\')
+        .replace(/%/g, '\\%')
+        .replace(/_/g, '\\_');
+      const pattern = `%${escaped}%`;
+      params.push(pattern, pattern);
+    }
 
-  if (options.tag) {
-    conditions.push(
-      'EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = n.id AND nt.name = ?)',
+    if (options.tag) {
+      conditions.push(
+        'EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = n.id AND nt.name = ?)',
+      );
+      params.push(options.tag);
+    }
+
+    const where = conditions.join(' AND ');
+
+    const [rows] = await getPool().execute<NoteRow[]>(
+      `SELECT n.id, n.user_id, n.title, n.content, n.created_at, n.updated_at
+       FROM notes n
+       WHERE ${where}
+       ORDER BY n.created_at DESC`,
+      params,
     );
-    params.push(options.tag);
+
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const noteIds = rows.map((r) => r.id);
+    const tagMap = await getTagsForNotes(noteIds);
+
+    return rows.map((row) => ({
+      ...row,
+      tags: tagMap.get(row.id) ?? [],
+    }));
+  } catch (error) {
+    throw new Error(`Failed to query notes for user ${userId}: ${(error as Error).message}`);
   }
-
-  const where = conditions.join(' AND ');
-
-  const [rows] = await getPool().execute<NoteRow[]>(
-    `SELECT n.id, n.user_id, n.title, n.content, n.created_at, n.updated_at
-     FROM notes n
-     WHERE ${where}
-     ORDER BY n.created_at DESC`,
-    params,
-  );
-
-  if (rows.length === 0) {
-    return [];
-  }
-
-  const noteIds = rows.map((r) => r.id);
-  const tagMap = await getTagsForNotes(noteIds);
-
-  return rows.map((row) => ({
-    ...row,
-    tags: tagMap.get(row.id) ?? [],
-  }));
 }
 
 export async function findNotesByUserId(userId: number): Promise<NoteWithTags[]> {

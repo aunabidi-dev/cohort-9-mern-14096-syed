@@ -1,11 +1,7 @@
 import type { Response } from 'express';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import * as noteService from '../services/noteService';
-import type {
-  CreateNoteInput,
-  GetNotesFilter,
-  UpdateNoteInput,
-} from '../services/noteService';
+import type { GetNotesFilter } from '../services/noteService';
 import { AppError } from '../types/error';
 import type { NoteWithTags } from '../models/note';
 
@@ -27,6 +23,20 @@ function getRouteParam(req: AuthenticatedRequest, name: string): string {
   return value;
 }
 
+function validateBody(req: AuthenticatedRequest): Record<string, unknown> {
+  const body: unknown = req.body;
+
+  if (
+    body === null ||
+    typeof body !== 'object' ||
+    Array.isArray(body)
+  ) {
+    throw new AppError(400, 'Request body must be a JSON object');
+  }
+
+  return body as Record<string, unknown>;
+}
+
 function getStringQuery(
   req: AuthenticatedRequest,
   name: string,
@@ -46,7 +56,7 @@ export async function createNote(
   res: Response<NoteWithTags>,
 ): Promise<void> {
   const userId = getAuthenticatedUserId(req);
-  const input = req.body as CreateNoteInput;
+  const input = validateBody(req);
   const note = await noteService.createNoteForUser(userId, input);
   res.status(201).json(note);
 }
@@ -80,7 +90,7 @@ export async function updateNote(
   res: Response<NoteWithTags>,
 ): Promise<void> {
   const userId = getAuthenticatedUserId(req);
-  const input = req.body as UpdateNoteInput;
+  const input = validateBody(req);
   const note = await noteService.updateNoteForUser(
     userId,
     getRouteParam(req, 'id'),

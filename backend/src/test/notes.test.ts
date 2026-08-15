@@ -47,11 +47,13 @@ function authHeader(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}` };
 }
 
-describe('Phase 3 notes API', () => {
+describe('Phase 3 notes API', function (this: Context) {
+  this.timeout(10000);
+
   let server: Server;
   let baseUrl: string;
-  let userAId: number;
-  let userBId: number;
+  let userAId: number | undefined;
+  let userBId: number | undefined;
   let tokenA: string;
   let tokenB: string;
 
@@ -96,19 +98,29 @@ describe('Phase 3 notes API', () => {
       await stopServer(server);
     }
 
-    // Clean up notes then users
-    await deleteNotesByUserId(userAId);
-    await deleteNotesByUserId(userBId);
-    await deleteUserByEmail(userAEmail);
-    await deleteUserByEmail(userBEmail);
+    // Guard cleanup so partial initialisation doesn't leave dangling users.
+    if (userAId !== undefined) {
+      await deleteNotesByUserId(userAId);
+      await deleteUserByEmail(userAEmail);
+    }
+
+    if (userBId !== undefined) {
+      await deleteNotesByUserId(userBId);
+      await deleteUserByEmail(userBEmail);
+    }
 
     await closePool();
   });
 
   beforeEach(async () => {
-    // Delete all notes for both test users before each test
-    await deleteNotesByUserId(userAId);
-    await deleteNotesByUserId(userBId);
+    // Only clean up if setup completed successfully.
+    if (userAId !== undefined) {
+      await deleteNotesByUserId(userAId);
+    }
+
+    if (userBId !== undefined) {
+      await deleteNotesByUserId(userBId);
+    }
   });
 
   // ---------------------------------------------------------------------------
@@ -698,14 +710,20 @@ describe('Phase 3 notes API', () => {
     });
 
     it('search only returns the authenticated user\'s notes', async () => {
-      // Create a matching note for User B
+      // Create a matching note for User A so every() is non-vacuous.
+      await apiRequest(baseUrl, '/notes', {
+        method: 'POST',
+        headers: authHeader(tokenA),
+        body: JSON.stringify({ title: 'Shared keyword note', content: 'From A.' }),
+      });
+
+      // User B also has a matching note that must not appear in A's results.
       await apiRequest(baseUrl, '/notes', {
         method: 'POST',
         headers: authHeader(tokenB),
         body: JSON.stringify({ title: 'Shared keyword note', content: 'From B.' }),
       });
 
-      // User A has no notes with that keyword
       const response = await apiRequest(
         baseUrl,
         '/notes?search=shared+keyword',
@@ -713,6 +731,7 @@ describe('Phase 3 notes API', () => {
       );
 
       const body = (await response.json()) as Array<{ user_id: number }>;
+      expect(body).to.have.lengthOf(1);
       expect(body.every((n) => n.user_id === userAId)).to.equal(true);
     });
 
@@ -792,7 +811,18 @@ describe('Phase 3 notes API', () => {
     });
 
     it('tag filter only returns the authenticated user\'s notes', async () => {
-      // User B creates a note with the tag
+      // User A also gets a Work-tagged note so every() is non-vacuous.
+      await apiRequest(baseUrl, '/notes', {
+        method: 'POST',
+        headers: authHeader(tokenA),
+        body: JSON.stringify({
+          title: 'A Work Note',
+          content: 'From A.',
+          tags: ['Work'],
+        }),
+      });
+
+      // User B creates a note with the same tag that must not appear for A.
       await apiRequest(baseUrl, '/notes', {
         method: 'POST',
         headers: authHeader(tokenB),
@@ -803,12 +833,12 @@ describe('Phase 3 notes API', () => {
         }),
       });
 
-      // User A has no Work-tagged notes
       const response = await apiRequest(baseUrl, '/notes?tag=Work', {
         headers: authHeader(tokenA),
       });
 
       const body = (await response.json()) as Array<{ user_id: number }>;
+      expect(body).to.have.lengthOf(1);
       expect(body.every((n) => n.user_id === userAId)).to.equal(true);
     });
   });

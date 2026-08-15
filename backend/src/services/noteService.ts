@@ -12,15 +12,19 @@ import { AppError } from '../types/error';
 
 const logger = pino({ name: 'noteService' });
 
+const MAX_TITLE_LENGTH = 255; // mirrors notes.title VARCHAR(255)
+const MAX_TAG_LENGTH = 100;   // mirrors note_tags.name VARCHAR(100)
+const MAX_TAGS_PER_NOTE = 50;
+
 export interface CreateNoteInput {
-  title?: string;
-  content?: string;
+  title?: unknown;
+  content?: unknown;
   tags?: unknown;
 }
 
 export interface UpdateNoteInput {
-  title?: string;
-  content?: string;
+  title?: unknown;
+  content?: unknown;
   tags?: unknown;
 }
 
@@ -39,6 +43,38 @@ function parseNoteId(rawId: string): number {
   return id;
 }
 
+function parseTitle(raw: unknown): string {
+  if (typeof raw !== 'string') {
+    throw new AppError(400, 'Title and content are required');
+  }
+
+  const trimmed = raw.trim();
+
+  if (!trimmed) {
+    throw new AppError(400, 'Title and content are required');
+  }
+
+  if (trimmed.length > MAX_TITLE_LENGTH) {
+    throw new AppError(400, `Title must not exceed ${MAX_TITLE_LENGTH} characters`);
+  }
+
+  return trimmed;
+}
+
+function parseContent(raw: unknown): string {
+  if (typeof raw !== 'string') {
+    throw new AppError(400, 'Title and content are required');
+  }
+
+  const trimmed = raw.trim();
+
+  if (!trimmed) {
+    throw new AppError(400, 'Title and content are required');
+  }
+
+  return trimmed;
+}
+
 function parseTags(raw: unknown): string[] {
   if (raw === undefined || raw === null) {
     return [];
@@ -48,6 +84,11 @@ function parseTags(raw: unknown): string[] {
     throw new AppError(400, 'Tags must be an array of strings');
   }
 
+  if (raw.length > MAX_TAGS_PER_NOTE) {
+    throw new AppError(400, `Cannot have more than ${MAX_TAGS_PER_NOTE} tags per note`);
+  }
+
+  const seen = new Set<string>();
   const tags: string[] = [];
 
   for (const item of raw) {
@@ -57,7 +98,17 @@ function parseTags(raw: unknown): string[] {
 
     const trimmed = item.trim();
 
-    if (trimmed.length > 0) {
+    if (trimmed.length === 0) {
+      continue;
+    }
+
+    if (trimmed.length > MAX_TAG_LENGTH) {
+      throw new AppError(400, `Each tag must not exceed ${MAX_TAG_LENGTH} characters`);
+    }
+
+    // Deduplicate: keep first occurrence, preserve order.
+    if (!seen.has(trimmed)) {
+      seen.add(trimmed);
       tags.push(trimmed);
     }
   }
@@ -69,16 +120,20 @@ export async function createNoteForUser(
   userId: number,
   input: CreateNoteInput,
 ): Promise<NoteWithTags> {
-  const title = input.title?.trim();
-  const content = input.content?.trim();
-
-  if (!title || !content) {
-    throw new AppError(400, 'Title and content are required');
-  }
-
+  const title = parseTitle(input.title);
+  const content = parseContent(input.content);
   const tags = parseTags(input.tags);
 
-  return createNote(userId, title, content, tags);
+  try {
+    return await createNote(userId, title, content, tags);
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    logger.error({ error }, 'Unexpected error creating note');
+    throw new AppError(500, 'Unable to create note');
+  }
 }
 
 export async function getNotesForUser(
@@ -125,23 +180,27 @@ export async function updateNoteForUser(
     throw new AppError(404, 'Note not found');
   }
 
-  const title = input.title?.trim();
-  const content = input.content?.trim();
-
-  if (!title || !content) {
-    throw new AppError(400, 'Title and content are required');
-  }
-
+  const title = parseTitle(input.title);
+  const content = parseContent(input.content);
   const tags = parseTags(input.tags);
 
-  const updated = await updateNote(id, title, content, tags);
+  try {
+    const updated = await updateNote(id, title, content, tags);
 
-  if (!updated) {
-    logger.error({ noteId: id }, 'Failed to fetch note after update');
+    if (!updated) {
+      logger.error({ noteId: id }, 'Failed to fetch note after update');
+      throw new AppError(500, 'Unable to update note');
+    }
+
+    return updated;
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    logger.error({ error, noteId: id }, 'Unexpected error updating note');
     throw new AppError(500, 'Unable to update note');
   }
-
-  return updated;
 }
 
 export async function deleteNoteForUser(

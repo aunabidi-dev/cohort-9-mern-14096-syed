@@ -1,4 +1,4 @@
-import type { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
+import type { RowDataPacket, ResultSetHeader, PoolConnection } from 'mysql2/promise';
 import { getPool } from '../config/database';
 
 export interface Note {
@@ -77,7 +77,11 @@ async function getTagsForNotes(noteIds: number[]): Promise<Map<number, string[]>
  * Insert tags for a note. Does NOT delete existing tags first.
  * Use only when you know the note has no existing tags (e.g. immediately after INSERT).
  */
-async function insertNoteTags(noteId: number, tags: string[]): Promise<void> {
+async function insertNoteTags(
+  noteId: number,
+  tags: string[],
+  conn: PoolConnection,
+): Promise<void> {
   if (tags.length === 0) {
     return;
   }
@@ -89,7 +93,7 @@ async function insertNoteTags(noteId: number, tags: string[]): Promise<void> {
     values.push(noteId, tag);
   }
 
-  await getPool().execute(
+  await conn.execute(
     `INSERT INTO note_tags (note_id, name) VALUES ${placeholders}`,
     values,
   );
@@ -99,9 +103,13 @@ async function insertNoteTags(noteId: number, tags: string[]): Promise<void> {
  * Replace all tags for a note: delete existing ones, then insert new ones.
  * Use for updates where the note may already have tags.
  */
-async function replaceNoteTags(noteId: number, tags: string[]): Promise<void> {
-  await getPool().execute('DELETE FROM note_tags WHERE note_id = ?', [noteId]);
-  await insertNoteTags(noteId, tags);
+async function replaceNoteTags(
+  noteId: number,
+  tags: string[],
+  conn: PoolConnection,
+): Promise<void> {
+  await conn.execute('DELETE FROM note_tags WHERE note_id = ?', [noteId]);
+  await insertNoteTags(noteId, tags, conn);
 }
 
 // ---------------------------------------------------------------------------
@@ -127,22 +135,39 @@ export async function createNote(
   content: string,
   tags: string[],
 ): Promise<NoteWithTags> {
-  const [result] = await getPool().execute<ResultSetHeader>(
-    'INSERT INTO notes (user_id, title, content) VALUES (?, ?, ?)',
-    [userId, title, content],
-  );
+  const conn = await getPool().getConnection();
 
-  // New note has no pre-existing tags — skip the DELETE, just INSERT.
-  await insertNoteTags(result.insertId, tags);
+  try {
+    await conn.beginTransaction();
 
-  // Fetch the row to get DB-generated timestamps; reuse the tags we just set.
-  const row = await findNoteRow(result.insertId);
+    const [result] = await conn.execute<ResultSetHeader>(
+      'INSERT INTO notes (user_id, title, content) VALUES (?, ?, ?)',
+      [userId, title, content],
+    );
 
-  if (!row) {
-    throw new Error('Failed to create note');
+    // New note has no pre-existing tags — skip the DELETE, just INSERT.
+    await insertNoteTags(result.insertId, tags, conn);
+
+    const [rows] = await conn.execute<NoteRow[]>(
+      'SELECT id, user_id, title, content, created_at, updated_at FROM notes WHERE id = ?',
+      [result.insertId],
+    );
+
+    await conn.commit();
+
+    const row = rows[0];
+
+    if (!row) {
+      throw new Error('Failed to create note');
+    }
+
+    return { ...row, tags };
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
   }
-
-  return { ...row, tags };
 }
 
 export interface QueryNotesOptions {
@@ -159,7 +184,12 @@ export async function queryNotes(
 
   if (options.search) {
     conditions.push('(n.title LIKE ? OR n.content LIKE ?)');
-    const pattern = `%${options.search}%`;
+    // Escape LIKE wildcards so user input is treated as a literal substring.
+    const escaped = options.search
+      .replace(/\\/g, '\\\\')
+      .replace(/%/g, '\\%')
+      .replace(/_/g, '\\_');
+    const pattern = `%${escaped}%`;
     params.push(pattern, pattern);
   }
 
@@ -214,22 +244,39 @@ export async function updateNote(
   content: string,
   tags: string[],
 ): Promise<NoteWithTags | null> {
-  await getPool().execute(
-    'UPDATE notes SET title = ?, content = ? WHERE id = ?',
-    [title, content, id],
-  );
+  const conn = await getPool().getConnection();
 
-  // Replace tags: delete old, insert new.
-  await replaceNoteTags(id, tags);
+  try {
+    await conn.beginTransaction();
 
-  // Fetch the row to get the DB-updated `updated_at`; reuse the tags we just set.
-  const row = await findNoteRow(id);
+    await conn.execute(
+      'UPDATE notes SET title = ?, content = ? WHERE id = ?',
+      [title, content, id],
+    );
 
-  if (!row) {
-    return null;
+    // Replace tags: delete old, insert new.
+    await replaceNoteTags(id, tags, conn);
+
+    const [rows] = await conn.execute<NoteRow[]>(
+      'SELECT id, user_id, title, content, created_at, updated_at FROM notes WHERE id = ?',
+      [id],
+    );
+
+    await conn.commit();
+
+    const row = rows[0];
+
+    if (!row) {
+      return null;
+    }
+
+    return { ...row, tags };
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
   }
-
-  return { ...row, tags };
 }
 
 export async function deleteNote(id: number): Promise<void> {

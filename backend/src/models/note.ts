@@ -14,7 +14,7 @@ export interface NoteWithTags extends Note {
   tags: string[];
 }
 
-interface NoteRow extends RowDataPacket, Note {}
+interface NoteRow extends RowDataPacket, Note { }
 
 interface TagRow extends RowDataPacket {
   note_id: number;
@@ -114,10 +114,10 @@ async function replaceNoteTags(
 ): Promise<void> {
   try {
     await conn.execute('DELETE FROM note_tags WHERE note_id = ?', [noteId]);
+    await insertNoteTags(noteId, tags, conn);
   } catch (error) {
-    throw new Error(`Failed to clear existing tags for note ${noteId}: ${(error as Error).message}`);
+    throw new Error(`Failed to replace tags for note ${noteId}: ${(error as Error).message}`);
   }
-  await insertNoteTags(noteId, tags, conn);
 }
 
 // ---------------------------------------------------------------------------

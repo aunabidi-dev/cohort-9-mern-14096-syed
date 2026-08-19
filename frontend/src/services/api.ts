@@ -1,24 +1,65 @@
 import type { ApiErrorBody, RequestOptions } from '../types/api';
 
 const API_BASE_URL: string =
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:5000/api';
+
+const TOKEN_KEY = 'auth_token';
+
+export function getStoredToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredToken(token: string): void {
+  try {
+    localStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    // Ignore storage quota or security errors
+  }
+}
+
+export function removeStoredToken(): void {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // Ignore storage quota or security errors
+  }
+}
 
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const token = getStoredToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> | undefined),
+  };
+
+  if (token && !headers.Authorization) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
     });
 
     if (!response.ok) {
-      const errorBody: ApiErrorBody = await response.json().catch(() => ({}));
-      throw new Error(errorBody.message || 'Request failed');
+      let errorMessage = `Request failed with status ${response.status}`;
+      try {
+        const errorBody: ApiErrorBody = (await response.json()) as ApiErrorBody;
+        if (errorBody.message) {
+          errorMessage = errorBody.message;
+        }
+      } catch {
+        // Response was not JSON
+      }
+      throw new Error(errorMessage);
     }
 
     if (response.status === 204) {
@@ -30,8 +71,7 @@ async function request<T>(
     if (error instanceof Error) {
       throw error;
     }
-
-    throw new Error('Request failed');
+    throw new Error('An unexpected network error occurred');
   }
 }
 
@@ -41,24 +81,24 @@ export const api = {
 
   post: <T>(
     endpoint: string,
-    body: unknown,
+    body?: unknown,
     options?: RequestOptions,
   ): Promise<T> =>
     request<T>(endpoint, {
       ...options,
       method: 'POST',
-      body: JSON.stringify(body),
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     }),
 
   put: <T>(
     endpoint: string,
-    body: unknown,
+    body?: unknown,
     options?: RequestOptions,
   ): Promise<T> =>
     request<T>(endpoint, {
       ...options,
       method: 'PUT',
-      body: JSON.stringify(body),
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     }),
 
   delete: <T>(endpoint: string, options?: RequestOptions): Promise<T> =>

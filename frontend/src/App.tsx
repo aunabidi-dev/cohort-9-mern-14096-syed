@@ -1,13 +1,12 @@
 import type { ReactElement } from 'react';
-import AppLayout from './components/layout/AppLayout';
-import HomePage from './pages/HomePage';
+import { Router } from './router/Router';
 import './App.css';
 
 function App(): ReactElement {
   return (
-    <AppLayout>
-      <HomePage />
-    </AppLayout>
+    <div className="app-root">
+      <Router />
+    </div>
   );
 }
 

@@ -34,7 +34,7 @@ export function NoteEditor({
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync state with selected note or reset for new note
+  // Sync state with selected note identity or reset for new note
   useEffect(() => {
     if (isCreating || !note) {
       setTitle('');
@@ -49,7 +49,7 @@ export function NoteEditor({
       setTagInput('');
       setError(null);
     }
-  }, [note, isCreating]);
+  }, [note?.id, isCreating]);
 
   const handleAddTag = (): void => {
     const trimmed = tagInput.trim().replace(/^#/, '');

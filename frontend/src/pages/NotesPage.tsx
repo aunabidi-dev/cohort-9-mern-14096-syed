@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactElement,
 } from 'react';
@@ -28,6 +29,9 @@ export function NotesPage(): ReactElement {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
+  const isCreatingRef = useRef<boolean>(isCreating);
+  isCreatingRef.current = isCreating;
+
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
@@ -45,17 +49,17 @@ export function NotesPage(): ReactElement {
       const data = await notesService.getNotes(filter);
       setNotes(data);
 
-      // If currently selected note is no longer in the fetched notes list, deselect it
-      if (selectedNoteId !== null && !data.some((n) => n.id === selectedNoteId)) {
-        if (data.length > 0) {
-          setSelectedNoteId(data[0].id);
-        } else {
-          setSelectedNoteId(null);
+      setSelectedNoteId((currentId) => {
+        // If currently selected note is no longer in the fetched notes list, reselect
+        if (currentId !== null && !data.some((n) => n.id === currentId)) {
+          return data.length > 0 ? data[0].id : null;
         }
-      } else if (selectedNoteId === null && data.length > 0 && !isCreating) {
-        // Select first note by default on desktop if not creating
-        setSelectedNoteId(data[0].id);
-      }
+        if (currentId === null && data.length > 0 && !isCreatingRef.current) {
+          // Select first note by default on desktop if not creating
+          return data[0].id;
+        }
+        return currentId;
+      });
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -65,7 +69,7 @@ export function NotesPage(): ReactElement {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedNoteId, isCreating]);
+  }, []);
 
   // Load notes on mount and debounce / trigger when search or tag filter changes
   useEffect(() => {

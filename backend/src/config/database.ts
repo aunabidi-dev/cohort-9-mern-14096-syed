@@ -1,6 +1,7 @@
 import mysql, { type Pool } from 'mysql2/promise';
 import config from './index';
 import { initializeUsersTable } from '../models/user';
+import { initializeNotesTable } from '../models/note';
 import { AppError } from '../types/error';
 
 let pool: Pool | null = null;
@@ -41,6 +42,7 @@ export async function initializeDatabase(): Promise<void> {
     const connection = await getPool().getConnection();
     connection.release();
     await initializeUsersTable();
+    await initializeNotesTable();
   } catch (error) {
     console.error('Database initialization failed:', error);
     throw new AppError(500, 'Unable to connect to the database');

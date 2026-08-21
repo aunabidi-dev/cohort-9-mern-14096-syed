@@ -180,11 +180,14 @@ export function NotesPage(): ReactElement {
       if (noteId > 0) {
         await notesService.deleteNote(noteId);
       }
-    } catch {
-      // Silently ignore if already deleted
-    } finally {
       setNotes((prev) => prev.filter((n) => n.id !== noteId));
       setExpandedNoteId((curr) => (curr === noteId ? null : curr));
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to delete empty note.');
+      }
     }
   };
 

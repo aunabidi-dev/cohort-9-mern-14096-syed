@@ -57,18 +57,35 @@ function formatRelativeTime(dateString: string): string {
   }
 }
 
-// Sanitize HTML string to prevent XSS without extra external dependencies
+// Safe DOM-based HTML sanitizer without extra npm dependencies
 function sanitizeHtml(html: string): string {
   if (!html) return '';
-  return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
-    .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
-    .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
-    .replace(/\son\w+="[^"]*"/gi, '')
-    .replace(/\son\w+='[^']*'/gi, '')
-    .replace(/\son\w+=\w+/gi, '')
-    .replace(/javascript:/gi, '');
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    // Remove dangerous tags
+    const dangerousTags = doc.querySelectorAll(
+      'script, iframe, object, embed, style, link, meta, base',
+    );
+    dangerousTags.forEach((el) => el.remove());
+
+    // Strip inline event attributes and javascript: URIs
+    const allElements = doc.body.querySelectorAll('*');
+    allElements.forEach((el) => {
+      Array.from(el.attributes).forEach((attr) => {
+        const attrName = attr.name.toLowerCase();
+        const attrVal = attr.value.trim().toLowerCase();
+        if (attrName.startsWith('on') || attrVal.startsWith('javascript:')) {
+          el.removeAttribute(attr.name);
+        }
+      });
+    });
+
+    return doc.body.innerHTML;
+  } catch {
+    return html;
+  }
 }
 
 // Convert existing raw content (plain text or HTML) into valid TipTap HTML
@@ -169,25 +186,30 @@ export function NoteCard({
     }
   }, [isExpanded]);
 
+  const isClosingRef = useRef<boolean>(false);
+
   // Collapse / Close Handler: Save or Auto-delete ONLY when closing
   const handleCollapse = useCallback(async (): Promise<void> => {
-    const currentTitle = latestDataRef.current.title.trim();
-    const currentText = latestDataRef.current.textContent.trim();
-    const currentHtml = latestDataRef.current.htmlContent;
-    const currentTags = latestDataRef.current.tags;
-    const noteIdToClose = currentNoteIdRef.current;
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
 
-    // Check if the note is completely empty
-    const isEmpty = !currentTitle && !currentText;
-
-    if (isEmpty) {
-      // Empty note -> auto-delete from DB/state on close
-      await onAutoDelete(noteIdToClose);
-      return;
-    }
-
-    // Save note to backend on close
     try {
+      const currentTitle = latestDataRef.current.title.trim();
+      const currentText = latestDataRef.current.textContent.trim();
+      const currentHtml = latestDataRef.current.htmlContent;
+      const currentTags = latestDataRef.current.tags;
+      const noteIdToClose = currentNoteIdRef.current;
+
+      // Check if the note is completely empty
+      const isEmpty = !currentTitle && !currentText;
+
+      if (isEmpty) {
+        // Empty note -> auto-delete from DB/state on close
+        await onAutoDelete(noteIdToClose);
+        return;
+      }
+
+      // Save note to backend on close
       const saved = await onSave(noteIdToClose, {
         title: currentTitle || 'Untitled Note',
         content: currentText ? currentHtml : '—',
@@ -197,6 +219,8 @@ export function NoteCard({
       onClose(savedId);
     } catch {
       // Keep card expanded on failure so user's edits are preserved for retry
+    } finally {
+      isClosingRef.current = false;
     }
   }, [onAutoDelete, onClose, onSave]);
 

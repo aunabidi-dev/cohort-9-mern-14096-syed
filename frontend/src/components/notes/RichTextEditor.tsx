@@ -6,11 +6,13 @@ import Placeholder from '@tiptap/extension-placeholder';
 interface RichTextEditorProps {
   content: string;
   onChange: (html: string, text: string) => void;
+  disabled?: boolean;
 }
 
 export function RichTextEditor({
   content,
   onChange,
+  disabled = false,
 }: RichTextEditorProps): ReactElement | null {
   const editor = useEditor({
     extensions: [
@@ -24,6 +26,7 @@ export function RichTextEditor({
       }),
     ],
     content: content || '<p></p>',
+    editable: !disabled,
     onUpdate: ({ editor: currentEditor }) => {
       onChange(currentEditor.getHTML(), currentEditor.getText());
     },
@@ -33,6 +36,13 @@ export function RichTextEditor({
       },
     },
   });
+
+  // Update editable state when disabled prop changes
+  useEffect(() => {
+    if (editor) {
+      editor.setEditable(!disabled);
+    }
+  }, [disabled, editor]);
 
   // Sync content if it changes externally (only when not actively focused)
   useEffect(() => {
@@ -56,6 +66,7 @@ export function RichTextEditor({
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleBold().run()}
+          disabled={disabled}
           className={`toolbar-btn ${editor.isActive('bold') ? 'is-active' : ''}`}
           title="Bold (Ctrl+B)"
           aria-label="Bold"
@@ -70,6 +81,7 @@ export function RichTextEditor({
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleItalic().run()}
+          disabled={disabled}
           className={`toolbar-btn ${editor.isActive('italic') ? 'is-active' : ''}`}
           title="Italic (Ctrl+I)"
           aria-label="Italic"
@@ -87,6 +99,7 @@ export function RichTextEditor({
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+          disabled={disabled}
           className={`toolbar-btn ${editor.isActive('heading', { level: 1 }) ? 'is-active' : ''}`}
           title="Heading 1"
           aria-label="Heading 1"
@@ -98,6 +111,7 @@ export function RichTextEditor({
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+          disabled={disabled}
           className={`toolbar-btn ${editor.isActive('heading', { level: 2 }) ? 'is-active' : ''}`}
           title="Heading 2"
           aria-label="Heading 2"
@@ -109,6 +123,7 @@ export function RichTextEditor({
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+          disabled={disabled}
           className={`toolbar-btn ${editor.isActive('heading', { level: 3 }) ? 'is-active' : ''}`}
           title="Heading 3"
           aria-label="Heading 3"
@@ -122,6 +137,7 @@ export function RichTextEditor({
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleBulletList().run()}
+          disabled={disabled}
           className={`toolbar-btn ${editor.isActive('bulletList') ? 'is-active' : ''}`}
           title="Bullet List"
           aria-label="Bullet List"
@@ -140,6 +156,7 @@ export function RichTextEditor({
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          disabled={disabled}
           className={`toolbar-btn ${editor.isActive('orderedList') ? 'is-active' : ''}`}
           title="Numbered List"
           aria-label="Numbered List"
@@ -158,6 +175,7 @@ export function RichTextEditor({
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          disabled={disabled}
           className={`toolbar-btn ${editor.isActive('blockquote') ? 'is-active' : ''}`}
           title="Quote"
           aria-label="Quote"
@@ -172,6 +190,7 @@ export function RichTextEditor({
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          disabled={disabled}
           className={`toolbar-btn ${editor.isActive('codeBlock') ? 'is-active' : ''}`}
           title="Code Block"
           aria-label="Code Block"
@@ -188,7 +207,7 @@ export function RichTextEditor({
         <button
           type="button"
           onClick={() => editor.chain().focus().undo().run()}
-          disabled={!editor.can().undo()}
+          disabled={disabled || !editor.can().undo()}
           className="toolbar-btn"
           title="Undo (Ctrl+Z)"
           aria-label="Undo"
@@ -203,7 +222,7 @@ export function RichTextEditor({
         <button
           type="button"
           onClick={() => editor.chain().focus().redo().run()}
-          disabled={!editor.can().redo()}
+          disabled={disabled || !editor.can().redo()}
           className="toolbar-btn"
           title="Redo (Ctrl+Y)"
           aria-label="Redo"

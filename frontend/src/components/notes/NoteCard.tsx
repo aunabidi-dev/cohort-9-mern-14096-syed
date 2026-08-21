@@ -156,6 +156,7 @@ export function NoteCard({
   const [textContent, setTextContent] = useState<string>(() => extractPlainText(note.content));
   const [tags, setTags] = useState<string[]>(note.tags || []);
   const [tagInput, setTagInput] = useState<string>('');
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   const currentNoteIdRef = useRef<number>(note.id);
   currentNoteIdRef.current = note.id;
@@ -207,6 +208,7 @@ export function NoteCard({
   const handleCollapse = useCallback(async (): Promise<void> => {
     if (isClosingRef.current) return;
     isClosingRef.current = true;
+    setIsSaving(true);
     hasClosedViaUserActionRef.current = true;
     const currentSession = sessionIdRef.current;
 
@@ -245,6 +247,7 @@ export function NoteCard({
       // Keep card expanded on failure so user's edits are preserved for retry
     } finally {
       isClosingRef.current = false;
+      setIsSaving(false);
     }
   }, [onAutoDelete, onClose, onSave]);
 
@@ -363,7 +366,14 @@ export function NoteCard({
       >
         <div className="note-card-expanded-header">
           <div className="note-card-status-wrapper">
-            <span className="note-card-editing-badge">Editing</span>
+            {isSaving ? (
+              <span className="save-status-indicator save-status-saving">
+                <span className="save-status-dot pulse" />
+                Saving...
+              </span>
+            ) : (
+              <span className="note-card-editing-badge">Editing</span>
+            )}
           </div>
 
           <div className="note-card-actions">
@@ -372,6 +382,7 @@ export function NoteCard({
               type="button"
               className="note-card-icon-btn note-card-delete-btn"
               onClick={handleDeleteClick}
+              disabled={isSaving}
               title="Delete note"
               aria-label={`Delete ${note.title}`}
             >
@@ -388,6 +399,7 @@ export function NoteCard({
               type="button"
               className="note-card-icon-btn note-card-collapse-btn"
               onClick={handleCollapseClick}
+              disabled={isSaving}
               title="Close note"
               aria-label="Close note"
             >
@@ -406,6 +418,7 @@ export function NoteCard({
             placeholder="Title..."
             value={title}
             onChange={handleTitleChange}
+            disabled={isSaving}
             maxLength={255}
             aria-label="Note title"
           />
@@ -417,8 +430,8 @@ export function NoteCard({
                   <TagBadge
                     key={tag}
                     name={tag}
-                    isRemovable
-                    onRemove={handleRemoveTag}
+                    isRemovable={!isSaving}
+                    onRemove={isSaving ? undefined : handleRemoveTag}
                   />
                 ))}
               </div>
@@ -433,6 +446,7 @@ export function NoteCard({
                 value={tagInput}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setTagInput(e.target.value)}
                 onKeyDown={handleTagKeyDown}
+                disabled={isSaving}
                 maxLength={50}
                 aria-label="Add tag"
               />
@@ -441,6 +455,7 @@ export function NoteCard({
                   type="button"
                   className="note-card-add-tag-btn"
                   onClick={handleAddTag}
+                  disabled={isSaving}
                 >
                   +
                 </button>
@@ -452,6 +467,7 @@ export function NoteCard({
           <RichTextEditor
             content={htmlContent}
             onChange={handleEditorChange}
+            disabled={isSaving}
           />
         </div>
 

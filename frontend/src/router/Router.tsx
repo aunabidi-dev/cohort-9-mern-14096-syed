@@ -6,7 +6,6 @@ import {
   useState,
   type AnchorHTMLAttributes,
   type MouseEvent,
-  type PropsWithChildren,
   type ReactElement,
 } from 'react';
 import { useAuth } from '../context/AuthContext';

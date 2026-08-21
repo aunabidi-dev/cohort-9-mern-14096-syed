@@ -1,13 +1,25 @@
-import type { MouseEvent, ReactElement } from 'react';
-import type { Note } from '../../types/notes';
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  type ChangeEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactElement,
+} from 'react';
+import type { Note, UpdateNoteInput } from '../../types/notes';
 import { TagBadge } from '../common/TagBadge';
+import { RichTextEditor } from './RichTextEditor';
 
 interface NoteCardProps {
   note: Note;
   index: number;
-  isSelected: boolean;
-  onSelect: (note: Note) => void;
+  isExpanded: boolean;
+  onToggleExpand: (note: Note) => void;
+  onSave: (noteId: number, data: UpdateNoteInput) => Promise<Note | void>;
   onDelete: (note: Note) => void;
+  onAutoDelete: (noteId: number) => Promise<void>;
 }
 
 export const NOTE_THEMES = [
@@ -44,39 +56,355 @@ function formatRelativeTime(dateString: string): string {
   }
 }
 
+// Convert existing raw content (plain text or HTML) into valid TipTap HTML
+function formatInitialHtml(rawContent?: string): string {
+  if (!rawContent) return '<p></p>';
+  const trimmed = rawContent.trim();
+  if (trimmed === '—' || trimmed === '.' || trimmed === 'Untitled') return '<p></p>';
+
+  // If already formatted HTML
+  if (/<[a-z][\s\S]*>/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  // Convert plain text with newlines to HTML paragraphs
+  return trimmed
+    .split('\n')
+    .map((line) => `<p>${line || '<br>'}</p>`)
+    .join('');
+}
+
+// Extract clean human-readable plain text for preview and word counts
+function extractPlainText(rawContent?: string): string {
+  if (!rawContent) return '';
+  const trimmed = rawContent.trim();
+  if (trimmed === '—' || trimmed === '.' || trimmed === 'Untitled') return '';
+
+  return trimmed
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeTitle(rawTitle?: string): string {
+  if (!rawTitle) return '';
+  if (rawTitle === 'Untitled Note') return '';
+  return rawTitle;
+}
+
 export function NoteCard({
   note,
   index,
-  isSelected,
-  onSelect,
+  isExpanded,
+  onToggleExpand,
+  onSave,
   onDelete,
+  onAutoDelete,
 }: NoteCardProps): ReactElement {
-  const themeClass = NOTE_THEMES[index % NOTE_THEMES.length];
+  const themeClass = NOTE_THEMES[Math.abs(index) % NOTE_THEMES.length];
   const isDark = themeClass === 'theme-344945';
+
+  const cardRef = useRef<HTMLDivElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  // Local editing state
+  const [title, setTitle] = useState<string>(normalizeTitle(note.title));
+  const [htmlContent, setHtmlContent] = useState<string>(() => formatInitialHtml(note.content));
+  const [textContent, setTextContent] = useState<string>(() => extractPlainText(note.content));
+  const [tags, setTags] = useState<string[]>(note.tags || []);
+  const [tagInput, setTagInput] = useState<string>('');
+
+  const currentNoteIdRef = useRef<number>(note.id);
+  currentNoteIdRef.current = note.id;
+
+  const latestDataRef = useRef({ title, htmlContent, textContent, tags });
+  latestDataRef.current = { title, htmlContent, textContent, tags };
+
+  // Sync state when note prop updates
+  useEffect(() => {
+    setTitle(normalizeTitle(note.title));
+    const initialHtml = formatInitialHtml(note.content);
+    setHtmlContent(initialHtml);
+    setTextContent(extractPlainText(note.content));
+    setTags(note.tags || []);
+  }, [note.id, note.title, note.content, note.tags]);
+
+  // Focus title input when expanded
+  useEffect(() => {
+    if (isExpanded) {
+      const timer = setTimeout(() => {
+        if (titleInputRef.current) {
+          titleInputRef.current.focus();
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isExpanded]);
+
+  // Collapse / Close Handler: Save or Auto-delete ONLY when closing
+  const handleCollapse = useCallback(async (): Promise<void> => {
+    const currentTitle = latestDataRef.current.title.trim();
+    const currentText = latestDataRef.current.textContent.trim();
+    const currentHtml = latestDataRef.current.htmlContent;
+    const currentTags = latestDataRef.current.tags;
+
+    // Check if the note is completely empty
+    const isEmpty = !currentTitle && !currentText;
+
+    if (isEmpty) {
+      // Empty note -> auto-delete from DB/state on close
+      await onAutoDelete(currentNoteIdRef.current);
+      return;
+    }
+
+    // Save note to backend on close
+    try {
+      await onSave(currentNoteIdRef.current, {
+        title: currentTitle || 'Untitled Note',
+        content: currentText ? currentHtml : '—',
+        tags: currentTags,
+      });
+    } catch {
+      // Ignore save error on close
+    }
+
+    onToggleExpand(note);
+  }, [note, onAutoDelete, onSave, onToggleExpand]);
+
+  // Click outside to close and save
+  useEffect(() => {
+    if (!isExpanded) return;
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent | Event): void => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      // Don't close if clicking inside this note card
+      if (cardRef.current && cardRef.current.contains(target)) {
+        return;
+      }
+
+      // Don't close if clicking inside a modal
+      if (target.closest('.modal-overlay') || target.closest('.modal-container')) {
+        return;
+      }
+
+      // Close and save
+      void handleCollapse();
+    };
+
+    const timer = setTimeout(() => {
+      document.addEventListener('pointerdown', handlePointerDown);
+    }, 80);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [isExpanded, handleCollapse]);
+
+  // Local input handlers — zero background network requests while typing
+  const handleTitleChange = (e: ChangeEvent<HTMLInputElement>): void => {
+    setTitle(e.target.value);
+  };
+
+  const handleEditorChange = (newHtml: string, newText: string): void => {
+    setHtmlContent(newHtml);
+    setTextContent(newText);
+    latestDataRef.current.htmlContent = newHtml;
+    latestDataRef.current.textContent = newText;
+  };
+
+  const handleAddTag = (): void => {
+    const trimmed = tagInput.trim().replace(/^#/, '');
+    if (!trimmed) return;
+
+    if (tags.includes(trimmed)) {
+      setTagInput('');
+      return;
+    }
+
+    const updatedTags = [...tags, trimmed];
+    setTags(updatedTags);
+    latestDataRef.current.tags = updatedTags;
+    setTagInput('');
+  };
+
+  const handleTagKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      handleAddTag();
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove: string): void => {
+    const updatedTags = tags.filter((t) => t !== tagToRemove);
+    setTags(updatedTags);
+    latestDataRef.current.tags = updatedTags;
+  };
 
   const handleDeleteClick = (e: MouseEvent<HTMLButtonElement>): void => {
     e.stopPropagation();
     onDelete(note);
   };
 
+  const handleCollapseClick = async (e: MouseEvent<HTMLButtonElement>): Promise<void> => {
+    e.stopPropagation();
+    await handleCollapse();
+  };
+
+  const handleCardClick = (): void => {
+    if (!isExpanded) {
+      onToggleExpand(note);
+    }
+  };
+
+  const wordCount = textContent.trim() ? textContent.trim().split(/\s+/).length : 0;
+  const charCount = textContent.length;
+
+  if (isExpanded) {
+    return (
+      <div
+        ref={cardRef}
+        className={`note-card note-card-expanded ${themeClass} ${isDark ? 'note-card-dark' : 'note-card-light'}`}
+        data-expanded="true"
+      >
+        <div className="note-card-expanded-header">
+          <div className="note-card-status-wrapper">
+            <span className="note-card-editing-badge">Editing</span>
+          </div>
+
+          <div className="note-card-actions">
+            {/* Delete Icon Button */}
+            <button
+              type="button"
+              className="note-card-icon-btn note-card-delete-btn"
+              onClick={handleDeleteClick}
+              title="Delete note"
+              aria-label={`Delete ${note.title}`}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                <line x1="10" y1="11" x2="10" y2="17" />
+                <line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+            </button>
+
+            {/* Collapse / Close Icon Button */}
+            <button
+              type="button"
+              className="note-card-icon-btn note-card-collapse-btn"
+              onClick={handleCollapseClick}
+              title="Close note"
+              aria-label="Close note"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="18 15 12 9 6 15" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div className="note-card-body">
+          <input
+            ref={titleInputRef}
+            type="text"
+            className="note-card-title-input"
+            placeholder="Title..."
+            value={title}
+            onChange={handleTitleChange}
+            maxLength={255}
+            aria-label="Note title"
+          />
+
+          <div className="note-card-tags-section">
+            {tags.length > 0 && (
+              <div className="note-card-tags-list">
+                {tags.map((tag) => (
+                  <TagBadge
+                    key={tag}
+                    name={tag}
+                    isRemovable
+                    onRemove={handleRemoveTag}
+                  />
+                ))}
+              </div>
+            )}
+
+            <div className="note-card-tag-input-pill">
+              <span className="tag-input-prefix">#</span>
+              <input
+                type="text"
+                className="note-card-tag-input"
+                placeholder="Add tag"
+                value={tagInput}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setTagInput(e.target.value)}
+                onKeyDown={handleTagKeyDown}
+                maxLength={50}
+                aria-label="Add tag"
+              />
+              {tagInput.trim() && (
+                <button
+                  type="button"
+                  className="note-card-add-tag-btn"
+                  onClick={handleAddTag}
+                >
+                  +
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* TipTap Rich Text Editor */}
+          <RichTextEditor
+            content={htmlContent}
+            onChange={handleEditorChange}
+          />
+        </div>
+
+        <div className="note-card-expanded-footer">
+          <div className="note-card-stats">
+            <span>{wordCount} words</span>
+            <span className="stats-dot">&bull;</span>
+            <span>{charCount} chars</span>
+          </div>
+          <span className="note-card-date">
+            Updated {formatRelativeTime(note.updated_at || note.created_at)}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Collapsed State
   return (
     <div
-      className={`note-card ${themeClass} ${isSelected ? 'note-card-selected' : ''} ${isDark ? 'note-card-dark' : 'note-card-light'}`}
-      onClick={() => onSelect(note)}
+      className={`note-card ${themeClass} ${isDark ? 'note-card-dark' : 'note-card-light'}`}
+      onClick={handleCardClick}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onSelect(note);
+          onToggleExpand(note);
         }
       }}
+      aria-expanded="false"
     >
       <div className="note-card-header">
-        <h4 className="note-card-title">{note.title}</h4>
+        <h4 className="note-card-title">{note.title || 'Untitled Note'}</h4>
         <button
           type="button"
-          className="note-card-delete-btn"
+          className="note-card-icon-btn note-card-delete-btn"
           onClick={handleDeleteClick}
           title="Delete note"
           aria-label={`Delete ${note.title}`}
@@ -90,7 +418,13 @@ export function NoteCard({
         </button>
       </div>
 
-      <p className="note-card-preview">{note.content}</p>
+      {/* Preserved Rich-Text Preview */}
+      {extractPlainText(note.content) && (
+        <div
+          className="note-card-preview-rich"
+          dangerouslySetInnerHTML={{ __html: formatInitialHtml(note.content) }}
+        />
+      )}
 
       {note.tags && note.tags.length > 0 && (
         <div className="note-card-tags">

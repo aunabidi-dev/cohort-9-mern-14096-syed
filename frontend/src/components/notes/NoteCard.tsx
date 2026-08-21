@@ -174,9 +174,15 @@ export function NoteCard({
     }
   }, [isExpanded, note.id, note.title, note.content, note.tags]);
 
-  // Focus title input when expanded
+  const sessionIdRef = useRef<number>(0);
+  const hasClosedViaUserActionRef = useRef<boolean>(false);
+  const isClosingRef = useRef<boolean>(false);
+
+  // Focus title input when expanded and bump session token
   useEffect(() => {
     if (isExpanded) {
+      sessionIdRef.current += 1;
+      hasClosedViaUserActionRef.current = false;
       const timer = setTimeout(() => {
         if (titleInputRef.current) {
           titleInputRef.current.focus();
@@ -186,12 +192,12 @@ export function NoteCard({
     }
   }, [isExpanded]);
 
-  const isClosingRef = useRef<boolean>(false);
-
   // Collapse / Close Handler: Save or Auto-delete ONLY when closing
   const handleCollapse = useCallback(async (): Promise<void> => {
     if (isClosingRef.current) return;
     isClosingRef.current = true;
+    hasClosedViaUserActionRef.current = true;
+    const currentSession = sessionIdRef.current;
 
     try {
       const currentTitle = latestDataRef.current.title.trim();
@@ -215,6 +221,12 @@ export function NoteCard({
         content: currentText ? currentHtml : '—',
         tags: currentTags,
       });
+
+      // Skip onClose if a newer editing session has begun (reopened while saving)
+      if (currentSession !== sessionIdRef.current) {
+        return;
+      }
+
       const savedId = saved ? saved.id : noteIdToClose;
       onClose(savedId);
     } catch {
@@ -260,7 +272,9 @@ export function NoteCard({
   const wasExpandedRef = useRef<boolean>(isExpanded);
   useEffect(() => {
     if (wasExpandedRef.current && !isExpanded) {
-      void handleCollapse();
+      if (!hasClosedViaUserActionRef.current) {
+        void handleCollapse();
+      }
     }
     wasExpandedRef.current = isExpanded;
   }, [isExpanded, handleCollapse]);
@@ -312,7 +326,11 @@ export function NoteCard({
 
   const handleCollapseClick = async (e: MouseEvent<HTMLButtonElement>): Promise<void> => {
     e.stopPropagation();
-    await handleCollapse();
+    try {
+      await handleCollapse();
+    } catch {
+      // Rejection boundary for click event
+    }
   };
 
   const handleCardClick = (): void => {

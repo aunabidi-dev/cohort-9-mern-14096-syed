@@ -230,6 +230,7 @@ export function NoteCard({
       const savedId = saved ? saved.id : noteIdToClose;
       onClose(savedId);
     } catch {
+      hasClosedViaUserActionRef.current = false;
       // Keep card expanded on failure so user's edits are preserved for retry
     } finally {
       isClosingRef.current = false;
@@ -462,24 +463,22 @@ export function NoteCard({
     <div
       className={`note-card ${themeClass} ${isDark ? 'note-card-dark' : 'note-card-light'}`}
       onClick={handleCardClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onExpand(note);
-        }
-      }}
-      aria-expanded="false"
     >
       <div className="note-card-header">
-        <h4 className="note-card-title">{note.title || 'Untitled Note'}</h4>
+        <button
+          type="button"
+          className="note-card-title-btn"
+          onClick={handleCardClick}
+          aria-label={`Open note: ${note.title || 'Untitled Note'}`}
+        >
+          <h4 className="note-card-title">{note.title || 'Untitled Note'}</h4>
+        </button>
         <button
           type="button"
           className="note-card-icon-btn note-card-delete-btn"
           onClick={handleDeleteClick}
           title="Delete note"
-          aria-label={`Delete ${note.title}`}
+          aria-label={`Delete ${note.title || 'Untitled Note'}`}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="3 6 5 6 21 6" />

@@ -886,6 +886,29 @@
   gap: 10px;
 }
 
+.note-card-title-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+  outline: none;
+}
+
+.note-card-title-btn:focus-visible {
+  outline: 2px solid var(--palette-deep-teal);
+  border-radius: 3px;
+}
+
+.note-card-dark .note-card-title-btn:focus-visible {
+  outline-color: #ffffff;
+}
+
 .note-card-title {
   font-size: 16px;
   font-weight: 600;

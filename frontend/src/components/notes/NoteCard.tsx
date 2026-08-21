@@ -163,16 +163,27 @@ export function NoteCard({
   const latestDataRef = useRef({ title, htmlContent, textContent, tags });
   latestDataRef.current = { title, htmlContent, textContent, tags };
 
-  // Sync state when note prop updates (only when collapsed, preserving in-progress typing while expanded)
+  const lastSyncedIdRef = useRef<number>(note.id);
+  const lastSyncedUpdateRef = useRef<string>(note.updated_at || note.created_at);
+
+  // Sync state when note prop updates (only when collapsed and note prop genuinely changed externally)
   useEffect(() => {
     if (!isExpanded) {
-      setTitle(normalizeTitle(note.title));
-      const initialHtml = formatInitialHtml(note.content);
-      setHtmlContent(initialHtml);
-      setTextContent(extractPlainText(note.content));
-      setTags(note.tags || []);
+      const hasNoteChanged =
+        note.id !== lastSyncedIdRef.current ||
+        (note.updated_at || note.created_at) !== lastSyncedUpdateRef.current;
+
+      if (hasNoteChanged) {
+        setTitle(normalizeTitle(note.title));
+        const initialHtml = formatInitialHtml(note.content);
+        setHtmlContent(initialHtml);
+        setTextContent(extractPlainText(note.content));
+        setTags(note.tags || []);
+        lastSyncedIdRef.current = note.id;
+        lastSyncedUpdateRef.current = note.updated_at || note.created_at;
+      }
     }
-  }, [isExpanded, note.id, note.title, note.content, note.tags]);
+  }, [isExpanded, note.id, note.title, note.content, note.tags, note.updated_at, note.created_at]);
 
   const sessionIdRef = useRef<number>(0);
   const hasClosedViaUserActionRef = useRef<boolean>(false);

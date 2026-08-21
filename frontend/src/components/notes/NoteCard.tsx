@@ -84,7 +84,7 @@ function sanitizeHtml(html: string): string {
 
     return doc.body.innerHTML;
   } catch {
-    return html;
+    return '';
   }
 }
 
@@ -254,6 +254,15 @@ export function NoteCard({
       clearTimeout(timer);
       document.removeEventListener('pointerdown', handlePointerDown);
     };
+  }, [isExpanded, handleCollapse]);
+
+  // Ensure note is saved if unexpanded programmatically (e.g. keyboard navigation or New Note)
+  const wasExpandedRef = useRef<boolean>(isExpanded);
+  useEffect(() => {
+    if (wasExpandedRef.current && !isExpanded) {
+      void handleCollapse();
+    }
+    wasExpandedRef.current = isExpanded;
   }, [isExpanded, handleCollapse]);
 
   // Local input handlers — zero background network requests while typing

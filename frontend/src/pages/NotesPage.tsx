@@ -164,8 +164,13 @@ export function NotesPage(): ReactElement {
         );
         return updated;
       }
-    } catch {
-      // Ignore silent errors
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to save note changes.');
+      }
+      throw err;
     }
   };
 
@@ -330,9 +335,10 @@ export function NotesPage(): ReactElement {
                         note={note}
                         index={trueIndex >= 0 ? trueIndex : 0}
                         isExpanded={expandedNoteId === note.id}
-                        onToggleExpand={(n) =>
+                        onExpand={(n) => setExpandedNoteId(n.id)}
+                        onClose={(noteId) =>
                           setExpandedNoteId((current) =>
-                            current === n.id ? null : n.id,
+                            current === noteId ? null : current,
                           )
                         }
                         onSave={handleSaveNote}

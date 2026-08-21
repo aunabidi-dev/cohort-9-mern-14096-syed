@@ -16,7 +16,8 @@ interface NoteCardProps {
   note: Note;
   index: number;
   isExpanded: boolean;
-  onToggleExpand: (note: Note) => void;
+  onExpand: (note: Note) => void;
+  onClose: (noteId: number) => void;
   onSave: (noteId: number, data: UpdateNoteInput) => Promise<Note | void>;
   onDelete: (note: Note) => void;
   onAutoDelete: (noteId: number) => Promise<void>;
@@ -56,19 +57,35 @@ function formatRelativeTime(dateString: string): string {
   }
 }
 
+// Sanitize HTML string to prevent XSS without extra external dependencies
+function sanitizeHtml(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+    .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
+    .replace(/\son\w+="[^"]*"/gi, '')
+    .replace(/\son\w+='[^']*'/gi, '')
+    .replace(/\son\w+=\w+/gi, '')
+    .replace(/javascript:/gi, '');
+}
+
 // Convert existing raw content (plain text or HTML) into valid TipTap HTML
 function formatInitialHtml(rawContent?: string): string {
   if (!rawContent) return '<p></p>';
   const trimmed = rawContent.trim();
   if (trimmed === '—' || trimmed === '.' || trimmed === 'Untitled') return '<p></p>';
 
+  const sanitized = sanitizeHtml(trimmed);
+
   // If already formatted HTML
-  if (/<[a-z][\s\S]*>/i.test(trimmed)) {
-    return trimmed;
+  if (/<[a-z][\s\S]*>/i.test(sanitized)) {
+    return sanitized;
   }
 
   // Convert plain text with newlines to HTML paragraphs
-  return trimmed
+  return sanitized
     .split('\n')
     .map((line) => `<p>${line || '<br>'}</p>`)
     .join('');
@@ -104,7 +121,8 @@ export function NoteCard({
   note,
   index,
   isExpanded,
-  onToggleExpand,
+  onExpand,
+  onClose,
   onSave,
   onDelete,
   onAutoDelete,
@@ -128,14 +146,16 @@ export function NoteCard({
   const latestDataRef = useRef({ title, htmlContent, textContent, tags });
   latestDataRef.current = { title, htmlContent, textContent, tags };
 
-  // Sync state when note prop updates
+  // Sync state when note prop updates (only when collapsed, preserving in-progress typing while expanded)
   useEffect(() => {
-    setTitle(normalizeTitle(note.title));
-    const initialHtml = formatInitialHtml(note.content);
-    setHtmlContent(initialHtml);
-    setTextContent(extractPlainText(note.content));
-    setTags(note.tags || []);
-  }, [note.id, note.title, note.content, note.tags]);
+    if (!isExpanded) {
+      setTitle(normalizeTitle(note.title));
+      const initialHtml = formatInitialHtml(note.content);
+      setHtmlContent(initialHtml);
+      setTextContent(extractPlainText(note.content));
+      setTags(note.tags || []);
+    }
+  }, [isExpanded, note.id, note.title, note.content, note.tags]);
 
   // Focus title input when expanded
   useEffect(() => {
@@ -155,29 +175,30 @@ export function NoteCard({
     const currentText = latestDataRef.current.textContent.trim();
     const currentHtml = latestDataRef.current.htmlContent;
     const currentTags = latestDataRef.current.tags;
+    const noteIdToClose = currentNoteIdRef.current;
 
     // Check if the note is completely empty
     const isEmpty = !currentTitle && !currentText;
 
     if (isEmpty) {
       // Empty note -> auto-delete from DB/state on close
-      await onAutoDelete(currentNoteIdRef.current);
+      await onAutoDelete(noteIdToClose);
       return;
     }
 
     // Save note to backend on close
     try {
-      await onSave(currentNoteIdRef.current, {
+      const saved = await onSave(noteIdToClose, {
         title: currentTitle || 'Untitled Note',
         content: currentText ? currentHtml : '—',
         tags: currentTags,
       });
+      const savedId = saved ? saved.id : noteIdToClose;
+      onClose(savedId);
     } catch {
-      // Ignore save error on close
+      // Keep card expanded on failure so user's edits are preserved for retry
     }
-
-    onToggleExpand(note);
-  }, [note, onAutoDelete, onSave, onToggleExpand]);
+  }, [onAutoDelete, onClose, onSave]);
 
   // Click outside to close and save
   useEffect(() => {
@@ -263,7 +284,7 @@ export function NoteCard({
 
   const handleCardClick = (): void => {
     if (!isExpanded) {
-      onToggleExpand(note);
+      onExpand(note);
     }
   };
 
@@ -395,7 +416,7 @@ export function NoteCard({
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onToggleExpand(note);
+          onExpand(note);
         }
       }}
       aria-expanded="false"

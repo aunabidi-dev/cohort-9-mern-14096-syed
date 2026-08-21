@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactElement } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import Placeholder from '@tiptap/extension-placeholder';
 
 interface RichTextEditorProps {
   content: string;
@@ -10,13 +11,16 @@ interface RichTextEditorProps {
 export function RichTextEditor({
   content,
   onChange,
-}: RichTextEditorProps) {
+}: RichTextEditorProps): ReactElement | null {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         heading: {
           levels: [1, 2, 3],
         },
+      }),
+      Placeholder.configure({
+        placeholder: 'Write note content here...',
       }),
     ],
     content: content || '<p></p>',
@@ -30,14 +34,10 @@ export function RichTextEditor({
     },
   });
 
-  // Sync content if it changes externally
+  // Sync content if it changes externally (only when not actively focused)
   useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
-      const currentText = editor.getText().trim();
-      // Only set content if editor is truly empty or completely different
-      if (!currentText && content) {
-        editor.commands.setContent(content, { emitUpdate: false });
-      }
+    if (editor && content !== editor.getHTML() && !editor.isFocused) {
+      editor.commands.setContent(content || '<p></p>', { emitUpdate: false });
     }
   }, [content, editor]);
 

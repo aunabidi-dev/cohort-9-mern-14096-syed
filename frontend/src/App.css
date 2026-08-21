@@ -1361,8 +1361,9 @@
   margin-bottom: 0;
 }
 
-.tiptap-editor-content p.is-editor-empty:first-child::before {
-  content: "Write note content here...";
+.tiptap-editor-content p.is-editor-empty:first-child::before,
+.tiptap-editor-content p.is-empty::before {
+  content: attr(data-placeholder);
   float: left;
   color: inherit;
   opacity: 0.45;

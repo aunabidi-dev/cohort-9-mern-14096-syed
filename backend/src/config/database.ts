@@ -3,6 +3,7 @@ import config from './index';
 import { initializeUsersTable } from '../models/user';
 import { initializeNotesTable } from '../models/note';
 import { AppError } from '../types/error';
+import { logger } from '../utils/logger';
 
 let pool: Pool | null = null;
 
@@ -44,7 +45,7 @@ export async function initializeDatabase(): Promise<void> {
     await initializeUsersTable();
     await initializeNotesTable();
   } catch (error) {
-    console.error('Database initialization failed:', error);
+    logger.error({ err: error }, 'Database initialization failed');
     throw new AppError(500, 'Unable to connect to the database');
   }
 }

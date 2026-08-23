@@ -3,11 +3,13 @@ import cors from 'cors';
 import helmet from 'helmet';
 import config from './config';
 import routes from './routes';
+import { httpLogger } from './utils/logger';
 import { notFound } from './middleware/notFound';
 import { errorHandler } from './middleware/errorHandler';
 
 const app: Express = express();
 
+app.use(httpLogger);
 app.use(cors({ origin: config.corsOrigin }));
 app.use(express.json());
 app.use(helmet());

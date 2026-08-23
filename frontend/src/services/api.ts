@@ -1,7 +1,25 @@
 import type { ApiErrorBody, RequestOptions } from '../types/api';
 
+function getEnvVar(key: string): string | undefined {
+  if (typeof process !== 'undefined' && process.env?.[key]) {
+    return process.env[key];
+  }
+  try {
+    const getImportMetaEnv = new Function(
+      'try { return import.meta.env; } catch { return undefined; }',
+    );
+    const env = getImportMetaEnv() as Record<string, string> | undefined;
+    if (env && env[key]) {
+      return env[key];
+    }
+  } catch {
+    // Non-ESM or test environment
+  }
+  return undefined;
+}
+
 const API_BASE_URL: string =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:5000/api';
+  getEnvVar('VITE_API_BASE_URL') || 'http://localhost:5000/api';
 
 const TOKEN_KEY = 'auth_token';
 

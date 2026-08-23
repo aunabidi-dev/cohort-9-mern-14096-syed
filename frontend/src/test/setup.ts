@@ -2,6 +2,9 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import { cleanup } from '@testing-library/react';
 
+// Set default VITE_API_BASE_URL for test environment
+process.env.VITE_API_BASE_URL = process.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+
 // Mock window.matchMedia for responsive components
 Object.defineProperty(window, 'matchMedia', {
   writable: true,

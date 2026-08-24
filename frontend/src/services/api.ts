@@ -1,7 +1,5 @@
 import type { ApiErrorBody, RequestOptions } from '../types/api';
-
-const API_BASE_URL: string =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:5000/api';
+import { API_BASE_URL } from '../config/env';
 
 const TOKEN_KEY = 'auth_token';
 

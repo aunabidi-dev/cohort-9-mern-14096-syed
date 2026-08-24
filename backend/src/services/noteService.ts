@@ -1,4 +1,4 @@
-import pino from 'pino';
+import { logger as rootLogger } from '../utils/logger';
 import type { NoteWithTags, QueryNotesOptions } from '../models/note';
 import {
   createNote,
@@ -10,7 +10,7 @@ import {
 } from '../models/note';
 import { AppError } from '../types/error';
 
-const logger = pino({ name: 'noteService' });
+const logger = rootLogger.child({ name: 'noteService' });
 
 const MAX_TITLE_LENGTH = 255; // mirrors notes.title VARCHAR(255)
 const MAX_TAG_LENGTH = 100;   // mirrors note_tags.name VARCHAR(100)

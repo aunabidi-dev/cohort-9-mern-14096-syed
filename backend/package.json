@@ -9,7 +9,7 @@
     "dev": "tsx watch src/server.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx src/smoke-test.ts && mocha --require tsx/cjs --require ./src/test/setup.ts --extension ts \"src/test/**/*.test.ts\"",
-    "test:coverage": "tsx src/smoke-test.ts && c8 --reporter=text --reporter=lcov mocha --require tsx/cjs --require ./src/test/setup.ts --extension ts src/test/**/*.test.ts"
+    "test:coverage": "tsx src/smoke-test.ts && c8 --all --src src --reporter=text --reporter=lcov mocha --require tsx/cjs --require ./src/test/setup.ts --extension ts src/test/**/*.test.ts"
   },
   "keywords": [],
   "author": "",

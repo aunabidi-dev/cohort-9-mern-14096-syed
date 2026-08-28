@@ -8,7 +8,8 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/smoke-test.ts && mocha --require tsx/cjs --require ./src/test/setup.ts --extension ts \"src/test/**/*.test.ts\""
+    "test": "tsx src/smoke-test.ts && mocha --require tsx/cjs --require ./src/test/setup.ts --extension ts \"src/test/**/*.test.ts\"",
+    "test:coverage": "tsx src/smoke-test.ts && c8 --all --src src --reporter=text --reporter=lcov mocha --require tsx/cjs --require ./src/test/setup.ts --extension ts src/test/**/*.test.ts"
   },
   "keywords": [],
   "author": "",
@@ -32,6 +33,7 @@
     "@types/express": "^5.0.0",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^22.14.0",
+    "c8": "^12.0.0",
     "chai": "^6.2.2",
     "mocha": "^11.8.0",
     "tsx": "^4.19.3",

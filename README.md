@@ -613,8 +613,8 @@ The error-handling layer:
 
 Before running the project, ensure the following are installed:
 
-* **Node.js:** v18.x or higher
-* **npm:** v9.x or higher
+* **Node.js:** 20.19.0 or higher
+* **npm:** 9.x or higher
 * **MySQL:** 8.0 or higher
 
 A MySQL database can be hosted locally or remotely.
